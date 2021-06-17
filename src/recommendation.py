@@ -6,47 +6,29 @@ Created on Wed Jun 16 12:40:23 2021
 @author: danish
 """
 
-import pandas as pd
+from data import read_data, process_data, get_train_test_data
 import os
-from sklearn.preprocessing import LabelEncoder
+from nn import train
 
 
-def read_data(data_path):
-    movies =  pd.read_csv(os.path.join(data_path, 'movies.csv'))
-    ratings = pd.read_csv(os.path.join(data_path, 'ratings.csv'))
-    return movies, ratings
-
-
-def process_data(df):
-    #label encoding 
-    le_movies = LabelEncoder()
-    df['movieId'] = le_movies.fit_transform(df.movieId.values)
-    le_user = LabelEncoder()
-    df['userId'] = le_user.fit_transform(df.userId.values)
-    unique_users = df.userId.unique()
-    unique_movies = df.movieId.unique()
-    return df, unique_movies, unique_users
 
 if __name__=='__main__':
     data_path = '../dataset/data/ml-25m'
+    dump_path = 'dump'
+    os.makedirs(dump_path, exist_ok=True)
     movies, ratings = read_data(data_path)
     
     
     df = ratings.merge(movies, how='left', on='movieId')
-        
-    df.groupby(["movieId", "title", "genres"]).agg({
-        "rating": "mean", "userId": "count"}).rename(
-            columns={"userId": "n_reviews"}).sort_values("rating", 
-                                                         ascending=False)
-                                                         
-    df_top_review = df.groupby(["movieId", "title", "genres"]).agg({
-        "rating": "mean", "userId": "count"}).rename(
-            columns={"userId": "n_reviews"}) 
-    df_top_review = df_top_review[df_top_review.n_reviews > 10] 
-    df_top_review.sort_values("rating", ascending=False)[:10]
-
-    df_top_genres = df.groupby(["genres"]).agg({
-        "rating": "mean", "userId": "count"}).rename(
-            columns={"userId": "n_reviews"}) 
-    df_top_genres = df_top_genres[df_top_genres.n_reviews > 10] 
-    df_top_genres.sort_values("rating", ascending=False)[:10]
+    #processing df
+    df, unique_mov, unique_usr = process_data(df, dump_path)
+    
+    X_train, X_test, y_train, y_test = get_train_test_data(df, dump_path, 
+                                                           test_size=0.3) 
+    train_data = (X_train, y_train)
+    valid_data = (X_test, y_test)
+    counts = (len(unique_usr), len(unique_mov))
+    
+    model, history = train(train_data, valid_data, batch_size=128, lr=0.001, epochs=1, 
+                  counts=counts, early_stop=3)
+    
