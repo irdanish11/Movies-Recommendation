@@ -11,9 +11,8 @@ import pandas as pd
 import os
 import torch
 from sklearn.preprocessing import LabelEncoder
-from sklearn.preprocessing import MinMaxScaler
 from utils import write_pickle
-
+from tqdm import tqdm
 
 class DataGenerator(torch.utils.data.Dataset):
   def __init__(self, X, y):
@@ -36,10 +35,10 @@ class DataGenerator(torch.utils.data.Dataset):
         targets = torch.tensor(self.y[index], dtype=torch.float32)
         return usr, mov, targets
 
-def get_data_loaders(X, y, batch_size):
+def get_data_loaders(X, y, batch_size, shuffle=True):
     data_gen = DataGenerator(X, y)
     #train_data, n_samples, patch_shape, transform
-    dataloader = torch.utils.data.DataLoader(data_gen, batch_size)
+    dataloader = torch.utils.data.DataLoader(data_gen, batch_size, shuffle=shuffle)
     return dataloader
 
 def read_data(data_path):
@@ -49,7 +48,23 @@ def read_data(data_path):
     return movies, ratings
 
 
+def store_mov_name_genere(df, all_movs, dump_path):
+    print('\nGenerating movie id to name and genre mappings, it takes a while!')
+    id2name = {}
+    for m in tqdm(all_movs):
+        temp = df[df.movieId==m]
+        id2name[m] = {'title':temp.title.unique()[0],
+                      'genres':temp.genres.unique()[0]}
+    write_pickle(id2name, path=os.path.join(dump_path, 'id2name.pkl'))
+    print('\nMovie id to name, genre completed!')
+
+
 def process_data(df, dump_path):
+    #all movies
+    all_movs = df.movieId.unique().tolist()
+    #all users
+    all_users = df.userId.unique().tolist()
+    store_mov_name_genere(df, all_movs, dump_path)
     print('\nProcessing data!')
     #label encoding 
     le_movies = LabelEncoder()
@@ -61,6 +76,8 @@ def process_data(df, dump_path):
     #writing label encoders
     write_pickle(le_movies, path=os.path.join(dump_path, 'mov_encoder.pkl'))
     write_pickle(le_user, path=os.path.join(dump_path, 'usr_encoder.pkl'))
+    write_pickle(all_movs, path=os.path.join(dump_path, 'all_movies.pkl'))
+    write_pickle(all_users, path=os.path.join(dump_path, 'all_users.pkl'))
     return df, unique_movies, unique_users
 
 

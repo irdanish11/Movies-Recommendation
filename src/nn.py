@@ -13,6 +13,8 @@ from utils import get_device, print_inline, save_network
 from data import get_data_loaders
 import numpy as np
 import torchlayers as tl
+from utils import write_pickle, read_pickle, load_network
+import os
 
 class RecommendationEngine(nn.Module):
     def __init__(self, unique_usr, unique_mov, emb_size):
@@ -38,7 +40,9 @@ class RecommendationEngine(nn.Module):
         prod_usr_mov = torch.inner(self.reg_usr_embd(x), 
                                    self.reg_mov_embd(y))
         sum_usr_mov_bias = prod_usr_mov + self.usr_bias(x) + self.mov_bias(y)
+        #print(sum_usr_mov_bias.shape)
         flatten_sum = torch.flatten(sum_usr_mov_bias, start_dim=1)
+        
         output = torch.sigmoid(self.fc_layer(flatten_sum))
         return output
     
@@ -120,7 +124,7 @@ def train(train_data, valid_data, batch_size, lr, epochs, counts, early_stop):
         epoch_valid_loss = np.mean(batch_loss['validation'])
         history['validation'].append(epoch_valid_loss)
         end = int(time.time() - start)
-        print("\nEpoch Training loss: {0:.4f} |".format(epoch_train_loss),
+        print("Epoch Training loss: {0:.4f} |".format(epoch_train_loss),
               "Validation loss: {0:.4f} |".format(epoch_valid_loss),
               f'Time taken in seconds: {end}.')
         if epoch_valid_loss<min_loss:
@@ -136,6 +140,19 @@ def train(train_data, valid_data, batch_size, lr, epochs, counts, early_stop):
                   'So terminating training!')
         print('')
     print('\nTraining Completed!')
+    write_pickle(history, path='dump/history.pkl')
     return model, history
     
-    
+
+def load_model_weights(dump_path, emb_size=50):
+    print('\nLoading model and weights')
+    device = get_device(cuda=True)
+    unique_mov = len(read_pickle(os.path.join(dump_path, 'all_movies.pkl')))
+    unique_usr = len(read_pickle(os.path.join(dump_path, 'all_users.pkl')))
+    #build model
+    model = RecommendationEngine(unique_usr, unique_mov, 
+                                 emb_size=emb_size).to(device)
+    #load weights
+    model = load_network(os.path.join(dump_path, 'model.pth'), model)
+    #return model in evaluation mode
+    return model.eval(), device

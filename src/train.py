@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jun 16 12:40:23 2021
+Created on Fri Jun 18 18:04:50 2021
 
 @author: danish
 """
@@ -11,25 +11,13 @@ import os
 from nn import train
 
 
-# def suggest(df, movies):
-#     # Let us get a user and see the top recommendations.
-#     user_id = df.userId.sample(1).iloc[0]
-#     movies_watched_by_user = df[df.userId == user_id]
-    
-#     movies_not_watched = movies[~movies["movieId"].isin(
-#         movies_watched_by_user.movieId.values)]["movieId"]
-#     movies_not_watched = list(
-#     set(movies_not_watched).intersection(set(movie2movie_encoded.keys()))
-# )
-
 
 if __name__=='__main__':
     data_path = '../dataset/data/ml-25m'
-    dump_path = 'dump'
+    dump_path = 'trained_model'
     os.makedirs(dump_path, exist_ok=True)
     movies, ratings = read_data(data_path)
-    
-    
+    #merging df
     df = ratings.merge(movies, how='left', on='movieId')
     #processing df
     df, unique_mov, unique_usr = process_data(df, dump_path)
@@ -39,7 +27,6 @@ if __name__=='__main__':
     train_data = (X_train, y_train)
     valid_data = (X_test, y_test)
     counts = (len(unique_usr), len(unique_mov))
-    
+    #traning
     model, history = train(train_data, valid_data, batch_size=128, lr=0.001, 
-                           epochs=15, counts=counts, early_stop=3)
-    
+                            epochs=10, counts=counts, early_stop=3)
