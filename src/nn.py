@@ -12,6 +12,7 @@ import torch.nn as nn
 from utils import get_device, print_inline, save_network
 from data import get_data_loaders
 import numpy as np
+import torchlayers as tl
 
 class RecommendationEngine(nn.Module):
     def __init__(self, unique_usr, unique_mov, emb_size):
@@ -19,11 +20,13 @@ class RecommendationEngine(nn.Module):
         #user embeding
         self.usr_embd = nn.Embedding(num_embeddings=unique_usr+1, 
                                      embedding_dim=emb_size)
+        self.reg_usr_embd = tl.L2(self.usr_embd, weight_decay=1e-6)
         self.usr_bias = nn.Embedding(num_embeddings=unique_usr+1, 
                                      embedding_dim=1)
         #mov embed
         self.mov_embd = nn.Embedding(num_embeddings=unique_mov+1, 
                                      embedding_dim=emb_size)
+        self.reg_mov_embd = tl.L2(self.mov_embd, weight_decay=1e-6)
         self.mov_bias = nn.Embedding(num_embeddings=unique_mov+1, 
                                      embedding_dim=1)
         #fc layer
@@ -32,7 +35,8 @@ class RecommendationEngine(nn.Module):
 
     def forward(self, x, y):
         #x:user, y:movies
-        prod_usr_mov = torch.inner(self.usr_embd(x), self.mov_embd(y))
+        prod_usr_mov = torch.inner(self.reg_usr_embd(x), 
+                                   self.reg_mov_embd(y))
         sum_usr_mov_bias = prod_usr_mov + self.usr_bias(x) + self.mov_bias(y)
         flatten_sum = torch.flatten(sum_usr_mov_bias, start_dim=1)
         output = torch.sigmoid(self.fc_layer(flatten_sum))
@@ -44,8 +48,8 @@ def get_criterions(device):
     return loss
 
 def get_optimizers(model, lr):
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, 
-                                 betas=(0.5, 0.999))
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), 
+                                 weight_decay=1e-5, amsgrad=True)
     return optimizer
 
 
@@ -71,6 +75,7 @@ def train(train_data, valid_data, batch_size, lr, epochs, counts, early_stop):
     
     #train loop
     num_batches = len(X_train)//batch_size - 1
+    valid_batches = len(X_valid)//batch_size - 1
     history = {'train':[], 'validation':[]}
     print('\nStarting training!\n')
     for epoch in range(epochs):
@@ -92,14 +97,17 @@ def train(train_data, valid_data, batch_size, lr, epochs, counts, early_stop):
             
             batch_loss['train'].append(loss_train.item())
             #info
-            epoch_info = f"Epoch: {epoch+1}/{epochs} | Batch: {i}/{num_batches} | "
+            epoch_info = f"Epoch: {epoch+1}/{epochs} | Batch: {i+1}/{num_batches} | "
             train_loss_info = "Training Loss: " \
                               "{0:.4f} | ".format(loss_train.item())
             print_inline(epoch_info+train_loss_info)
         epoch_train_loss = np.mean(batch_loss['train'])
         history['train'].append(epoch_train_loss)
         #validation
+        print('\nValidating!')
         for i, (valid_usr, valid_mov, valid_y) in enumerate(valid_loader):
+            if i==valid_batches:
+                break
             #validation data
             valid_usr = valid_usr.to(device)
             valid_mov = valid_mov.to(device)

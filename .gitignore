@@ -1,2 +1,4 @@
 dataset/data
 *.ini
+*.csv
+src/dump
